@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steam 상점 그래픽 자산 생성기</title>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',sans-serif; background:#f3f4f6; color:#1f2937; min-height:100vh; }
+  .container { max-width:960px; margin:0 auto; padding:24px; }
+  h1 { color:#0f172a; font-size:24px; margin-bottom:8px; }
+  .subtitle { color:#2563eb; font-size:13px; margin-bottom:24px; }
+
+  /* Cards */
+  .card { background:#ffffff; border:1px solid #e5e7eb; border-radius:8px; padding:20px; margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(15,23,42,0.04); }
+  .card h2 { font-size:16px; color:#0f172a; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+  .step-num { background:#2563eb; color:#ffffff; width:24px; height:24px; border-radius:50%;
+    display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+
+  /* Upload */
+  .upload-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .drop-zone { border:2px dashed #d1d5db; border-radius:8px; padding:32px 16px; text-align:center;
+    cursor:pointer; transition:border-color .2s, background .2s; position:relative; background:#fafbfc; }
+  .drop-zone:hover, .drop-zone.dragover { border-color:#2563eb; background:#eff6ff; }
+  .drop-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .drop-zone .label { font-size:14px; color:#6b7280; }
+  .drop-zone .label strong { color:#374151; display:block; margin-bottom:4px; }
+  .preview-img { max-width:100%; max-height:140px; margin-top:8px; border-radius:4px; }
+  .warning { background:#fef3c7; border:1px solid #f59e0b; color:#92400e; padding:8px 12px;
+    border-radius:4px; font-size:12px; margin-top:8px; }
+
+  /* Checkboxes (legacy, unused) */
+  .checkbox-group { margin-bottom:12px; }
+  .checkbox-group h3 { font-size:13px; color:#6b7280; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px; }
+  .checkbox-list { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .cb-item { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#f9fafb;
+    border-radius:4px; cursor:pointer; font-size:13px; }
+  .cb-item:hover { background:#f3f4f6; }
+  .cb-item input { accent-color:#2563eb; }
+  .cb-item .size { color:#6b7280; font-size:11px; margin-left:auto; }
+
+  /* Logo Controls (legacy) */
+  .controls-grid { display:grid; grid-template-columns:2fr 1fr; gap:12px; }
+  .control-group label { display:block; font-size:12px; color:#6b7280; margin-bottom:4px; }
+  .control-group input[type=range] { width:100%; accent-color:#2563eb; }
+  .control-group input[type=number] { width:80px; background:#ffffff; border:1px solid #d1d5db;
+    color:#1f2937; padding:4px 8px; border-radius:4px; }
+  .position-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; width:120px; }
+  .pos-btn { background:#f3f4f6; border:1px solid #d1d5db; color:#6b7280; padding:6px; border-radius:3px;
+    cursor:pointer; font-size:10px; text-align:center; }
+  .pos-btn:hover { border-color:#2563eb; }
+  .pos-btn.active { background:#2563eb; color:#ffffff; border-color:#2563eb; }
+  .val-display { color:#2563eb; font-size:13px; font-weight:600; }
+  .tooltip { background:#fef3c7; color:#92400e; font-size:11px; padding:6px 10px;
+    border-radius:4px; margin-top:8px; border:1px solid #fcd34d; }
+
+  /* Live Preview (legacy) */
+  .preview-box-wrap { margin-top:16px; }
+  .preview-box-header { display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:8px; font-size:12px; color:#6b7280; }
+  .preview-box-header select { background:#ffffff; border:1px solid #d1d5db; color:#1f2937;
+    padding:4px 8px; border-radius:4px; font-size:12px; }
+  .preview-box-header .override-wrap { display:flex; gap:6px; align-items:center; }
+  .preview-box-header input[type=number] { background:#ffffff; border:1px solid #d1d5db;
+    color:#1f2937; padding:4px 8px; border-radius:4px; font-size:12px; width:90px; }
+  .preview-box-header input[type=number].has-override { border-color:#d97706; color:#d97706; }
+  .override-badge { font-size:10px; color:#d97706; }
+  .preview-frame { position:relative; background:#f9fafb; border:1px solid #d1d5db; border-radius:4px;
+    margin:0 auto; overflow:hidden;
+    background-image:
+      linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+      linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+      linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+    background-size:16px 16px;
+    background-position:0 0, 0 8px, 8px -8px, -8px 0px; }
+  .preview-logo { position:absolute; background:rgba(37,99,235,0.15);
+    border:2px solid #2563eb; border-radius:2px; display:flex; align-items:center;
+    justify-content:center; font-size:11px; color:#1e3a8a; font-weight:700; overflow:hidden; }
+  .preview-logo img { max-width:100%; max-height:100%; object-fit:contain; display:block; }
+  .preview-pad-guide { position:absolute; border:1px dashed rgba(217,119,6,0.6); pointer-events:none; }
+  .preview-dims { position:absolute; bottom:4px; right:6px; font-size:10px; color:#374151;
+    background:rgba(255,255,255,0.9); padding:2px 6px; border-radius:2px; border:1px solid #e5e7eb; }
+  .preview-legend { text-align:center; font-size:11px; color:#2563eb; margin-top:8px; line-height:1.6; }
+  .preview-legend b { color:#d97706; }
+
+  /* Asset Cards (combined Step 2) */
+  .asset-card { background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;
+    padding:12px 14px; margin-bottom:8px; transition:opacity .2s; }
+  .asset-card.required { border-left:3px solid #2563eb; }
+  .asset-card.disabled { opacity:0.45; }
+  .asset-card.disabled .asset-card-body { pointer-events:none; filter:grayscale(0.5); }
+  .asset-card-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; cursor:pointer; }
+  .asset-card-head input[type=checkbox] { accent-color:#2563eb; width:16px; height:16px; cursor:pointer; }
+  .asset-card-head .title { font-size:14px; color:#0f172a; font-weight:600; }
+  .asset-card-head .dims { font-size:11px; color:#6b7280; }
+  .asset-card-head .badge { font-size:10px; background:#dbeafe; color:#1d4ed8;
+    padding:2px 6px; border-radius:3px; font-weight:600; }
+  .asset-card-head .badge.opt { background:#f3f4f6; color:#6b7280; }
+  .asset-card-body { display:grid; grid-template-columns:minmax(0,1fr) 240px;
+    gap:18px; align-items:center; }
+  .asset-controls { display:flex; flex-direction:column; gap:16px; justify-content:center; }
+  .asset-controls .ctrl-row { margin-bottom:0; }
+  .asset-controls label { display:block; font-size:11px; color:#6b7280; margin-bottom:4px; }
+  .asset-controls .val-display { color:#2563eb; font-weight:600; }
+  .asset-controls input[type=number] { width:84px; background:#ffffff; border:1px solid #d1d5db;
+    color:#1f2937; padding:4px 8px; border-radius:3px; font-size:12px; }
+  .asset-controls input[type=range] { width:70%; accent-color:#2563eb; }
+  .ctrl-row-hbox { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+  .mini-pos-grid { display:grid; grid-template-columns:repeat(3,28px); gap:3px; }
+  .mini-pos-btn { background:#f3f4f6; border:1px solid #d1d5db; color:#6b7280;
+    padding:4px; border-radius:2px; cursor:pointer; font-size:10px; text-align:center;
+    user-select:none; }
+  .mini-pos-btn:hover { border-color:#2563eb; }
+  .mini-pos-btn.active { background:#2563eb; color:#ffffff; border-color:#2563eb; }
+  .asset-preview-mini { position:relative; background:#f9fafb; border:1px solid #d1d5db;
+    border-radius:4px; overflow:hidden; margin:0 auto;
+    background-image:
+      linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+      linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+      linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+    background-size:12px 12px;
+    background-position:0 0, 0 6px, 6px -6px, -6px 0px; }
+  .mini-logo { position:absolute; background:rgba(37,99,235,0.15);
+    border:2px solid #2563eb; border-radius:2px; display:flex; align-items:center;
+    justify-content:center; font-size:10px; color:#1e3a8a; font-weight:700; overflow:hidden; }
+  .mini-logo img { max-width:100%; max-height:100%; object-fit:contain; display:block; }
+  .mini-pad-guide { position:absolute; border:1px dashed rgba(217,119,6,0.55); pointer-events:none; }
+  .mini-dims { position:absolute; bottom:2px; right:4px; font-size:9px; color:#374151;
+    background:rgba(255,255,255,0.9); padding:1px 4px; border-radius:2px; border:1px solid #e5e7eb; }
+  .mini-legend { position:absolute; top:2px; left:4px; font-size:9px; color:#2563eb;
+    background:rgba(255,255,255,0.9); padding:1px 4px; border-radius:2px; border:1px solid #e5e7eb; }
+  .no-logo-note { color:#92400e; font-size:12px; padding:14px;
+    background:#fef3c7; border-radius:4px; border:1px solid #fcd34d; }
+
+  /* Generate */
+  .btn-generate { width:100%; padding:14px; background:#16a34a; color:#ffffff; border:none;
+    border-radius:6px; font-size:16px; font-weight:600; cursor:pointer; transition:background .2s; }
+  .btn-generate:hover { background:#15803d; }
+  .btn-generate:disabled { background:#a7f3d0; cursor:not-allowed; opacity:.7; color:#065f46; }
+
+  /* Progress & Preview */
+  .progress-list { margin-top:16px; }
+  .progress-item { display:flex; align-items:center; gap:8px; padding:6px 0;
+    border-bottom:1px solid #e5e7eb; font-size:13px; color:#374151; }
+  .progress-item .status { width:70px; text-align:right; }
+  .status-processing { color:#2563eb; }
+  .status-done { color:#16a34a; }
+  .status-error { color:#dc2626; }
+
+  .preview-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; margin-top:16px; }
+  .preview-card { background:#ffffff; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden; }
+  .preview-card img { width:100%; display:block; }
+  .preview-card .name { padding:6px 8px; font-size:11px; color:#6b7280; }
+
+  .btn-download { display:inline-block; margin-top:12px; padding:10px 24px; background:#2563eb;
+    color:#ffffff; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer;
+    text-decoration:none; }
+  .btn-download:hover { background:#1d4ed8; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Steam 상점 그래픽 자산 생성기</h1>
+  <p class="subtitle">키 비주얼 + 로고를 업로드하면 모든 Steam 그래픽 자산을 자동 생성합니다</p>
+
+  <!-- Step 1: Upload -->
+  <div class="card">
+    <h2><span class="step-num">1</span> 이미지 업로드</h2>
+    <div class="upload-grid">
+      <div class="drop-zone" id="kvZone">
+        <input type="file" accept=".png,.jpg,.jpeg,.webp" id="kvInput">
+        <div class="label"><strong>키 비주얼 (필수)</strong>PNG/JPG, 2000px+ 권장</div>
+        <img class="preview-img hidden" id="kvPreview">
+      </div>
+      <div class="drop-zone" id="logoZone">
+        <input type="file" accept=".png,.jpg,.jpeg,.webp" id="logoInput">
+        <div class="label"><strong>로고 (필수)</strong>투명 배경 PNG 권장</div>
+        <img class="preview-img hidden" id="logoPreview">
+      </div>
+    </div>
+    <div id="uploadWarnings"></div>
+  </div>
+
+  <!-- Step 2: Assets + Logo Settings (combined) -->
+  <div class="card">
+    <h2><span class="step-num">2</span> 자산 선택 및 로고 설정</h2>
+    <p style="font-size:12px; color:#8f98a0; margin-bottom:10px;">
+      체크박스로 생성 여부를 선택하고, 각 자산별로 로고 크기 · 위치 · 여백을 개별 설정하세요.
+      미리보기가 실시간으로 반영됩니다.
+    </p>
+    <div class="tooltip">Steam 가이드라인: 로고 외 텍스트 삽입 금지</div>
+    <div id="assetCardList" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- Step 3: Generate -->
+  <div class="card">
+    <h2><span class="step-num">3</span> 생성</h2>
+    <button class="btn-generate" id="generateBtn" disabled>이미지를 먼저 업로드하세요</button>
+    <div class="progress-list hidden" id="progressList"></div>
+    <div class="preview-grid hidden" id="previewGrid"></div>
+    <div class="hidden" id="downloadSection">
+      <a class="btn-download" id="downloadBtn" href="#">ZIP 다운로드</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const SPECS = {
+  header_capsule:   { w:920,  h:430,  required:true,  label:"헤더 캡슐" },
+  small_capsule:    { w:462,  h:174,  required:true,  label:"소형 캡슐",
+    derivatives:[{w:184,h:69},{w:120,h:45}] },
+  main_capsule:     { w:1232, h:706,  required:true,  label:"메인 캡슐" },
+  vertical_capsule: { w:748,  h:896,  required:true,  label:"수직 캡슐" },
+  page_background:  { w:1438, h:810,  required:false, label:"페이지 배경", logoOverlay:false },
+  bundle_header:    { w:707,  h:232,  required:false, label:"꾸러미 헤더" },
+};
+
+// ===== Canvas utilities =====
+const POSITIONS = {
+  TL: (cw, ch, lw, lh, pad) => ({ x: pad, y: pad }),
+  TC: (cw, ch, lw, lh, pad) => ({ x: Math.round((cw-lw)/2), y: pad }),
+  TR: (cw, ch, lw, lh, pad) => ({ x: cw-lw-pad, y: pad }),
+  ML: (cw, ch, lw, lh, pad) => ({ x: pad, y: Math.round((ch-lh)/2) }),
+  MC: (cw, ch, lw, lh, pad) => ({ x: Math.round((cw-lw)/2), y: Math.round((ch-lh)/2) }),
+  MR: (cw, ch, lw, lh, pad) => ({ x: cw-lw-pad, y: Math.round((ch-lh)/2) }),
+  BL: (cw, ch, lw, lh, pad) => ({ x: pad, y: ch-lh-pad }),
+  BC: (cw, ch, lw, lh, pad) => ({ x: Math.round((cw-lw)/2), y: ch-lh-pad }),
+  BR: (cw, ch, lw, lh, pad) => ({ x: cw-lw-pad, y: ch-lh-pad }),
+};
+
+function fileToImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('이미지를 불러올 수 없습니다'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function drawCoverFit(ctx, img, dx, dy, dw, dh) {
+  const srcAspect = img.naturalWidth / img.naturalHeight;
+  const dstAspect = dw / dh;
+  let sx, sy, sw, sh;
+  if (srcAspect > dstAspect) {
+    sh = img.naturalHeight;
+    sw = sh * dstAspect;
+    sx = (img.naturalWidth - sw) / 2;
+    sy = 0;
+  } else {
+    sw = img.naturalWidth;
+    sh = sw / dstAspect;
+    sx = 0;
+    sy = (img.naturalHeight - sh) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+}
+
+function canvasToBlob(canvas, quality = 0.95) {
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+}
+
+async function compositeAsset(kvImg, logoImg, key, w, h, spec, settings) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  if (key === 'page_background') {
+    ctx.filter = 'blur(8px) brightness(0.6)';
+    drawCoverFit(ctx, kvImg, 0, 0, w, h);
+    ctx.filter = 'none';
+    return canvasToBlob(canvas);
+  }
+
+  drawCoverFit(ctx, kvImg, 0, 0, w, h);
+
+  if (spec.logoOverlay !== false && logoImg) {
+    const scale = settings.scale ?? 0.4;
+    const padding = settings.padding ?? 40;
+    const position = settings.position || 'BC';
+    const logoAspect = logoImg.naturalHeight / logoImg.naturalWidth;
+    const lw = Math.round(w * scale);
+    const lh = Math.round(lw * logoAspect);
+    const posFn = POSITIONS[position] || POSITIONS.BC;
+    const { x, y } = posFn(w, h, lw, lh, padding);
+    ctx.drawImage(logoImg, Math.max(0, x), Math.max(0, y), lw, lh);
+  }
+  return canvasToBlob(canvas);
+}
+
+function nextTick() { return new Promise(r => setTimeout(r, 0)); }
+
+// ===== Per-asset state =====
+const POSITIONS_ORDER = ['TL','TC','TR','ML','MC','MR','BL','BC','BR'];
+const POS_LABELS = ['↖','↑','↗','←','●','→','↙','↓','↘'];
+const assetState = {};
+for (const [key, spec] of Object.entries(SPECS)) {
+  assetState[key] = {
+    enabled: spec.required,
+    scale: 0.4,
+    position: 'BC',
+    padding: key === 'small_capsule' ? 10 : 40
+  };
+}
+
+const assetCardList = document.getElementById('assetCardList');
+
+function buildAssetCard(key, spec) {
+  const state = assetState[key];
+  const hasLogo = key !== 'page_background';
+  const subtitle = key === 'small_capsule' ? ' (+ 184×69, 120×45 파생)' : '';
+
+  const card = document.createElement('div');
+  card.className = 'asset-card' + (spec.required ? ' required' : '') + (state.enabled ? '' : ' disabled');
+  card.id = `asset-card-${key}`;
+  card.innerHTML = `
+    <label class="asset-card-head">
+      <input type="checkbox" data-assetkey="${key}" ${state.enabled ? 'checked' : ''}>
+      <span class="title">${spec.label}${subtitle}</span>
+      <span class="dims">${spec.w}×${spec.h}</span>
+      <span class="badge ${spec.required ? '' : 'opt'}">${spec.required ? '필수' : '선택'}</span>
+    </label>
+    <div class="asset-card-body">
+      <div class="asset-preview-mini" data-preview="${key}">
+        <div class="mini-pad-guide"></div>
+        <div class="mini-logo">LOGO</div>
+        <div class="mini-legend"></div>
+        <div class="mini-dims">${spec.w}×${spec.h}</div>
+      </div>
+      ${hasLogo ? `
+        <div class="asset-controls">
+          <div class="ctrl-row">
+            <label>로고 크기: <span class="val-display" data-scaleval="${key}">${Math.round(state.scale*100)}%</span></label>
+            <input type="range" data-scale="${key}" min="10" max="90" value="${Math.round(state.scale*100)}">
+          </div>
+          <div class="ctrl-row ctrl-row-hbox">
+            <div>
+              <label>로고 위치</label>
+              <div class="mini-pos-grid" data-posgrid="${key}"></div>
+            </div>
+            <div>
+              <label>여백 (px)</label>
+              <input type="number" data-padding="${key}" value="${state.padding}" min="0" max="300">
+            </div>
+          </div>
+        </div>
+      ` : `
+        <div class="no-logo-note">
+          페이지 배경에는 로고가 합성되지 않습니다 (Steam 가이드라인).
+          키 비주얼이 블러 + 어둡게 처리되어 사용됩니다.
+        </div>
+      `}
+    </div>
+  `;
+  return card;
+}
+
+function buildMiniPosGrid(key) {
+  const grid = assetCardList.querySelector(`[data-posgrid="${key}"]`);
+  if (!grid) return;
+  POSITIONS_ORDER.forEach((p, i) => {
+    const b = document.createElement('div');
+    b.className = 'mini-pos-btn' + (assetState[key].position === p ? ' active' : '');
+    b.textContent = POS_LABELS[i];
+    b.dataset.pos = p;
+    b.onclick = () => {
+      grid.querySelectorAll('.mini-pos-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      assetState[key].position = p;
+      updateAssetPreview(key);
+    };
+    grid.appendChild(b);
+  });
+}
+
+function updateAssetPreview(key) {
+  const spec = SPECS[key];
+  const previewEl = assetCardList.querySelector(`[data-preview="${key}"]`);
+  if (!previewEl) return;
+
+  const MAX_W = 560, MAX_H = 220;
+  let fw = MAX_W, fh = MAX_W * spec.h / spec.w;
+  if (fh > MAX_H) { fh = MAX_H; fw = MAX_H * spec.w / spec.h; }
+  previewEl.style.width = fw + 'px';
+  previewEl.style.height = fh + 'px';
+
+  const miniLogo = previewEl.querySelector('.mini-logo');
+  const padGuide = previewEl.querySelector('.mini-pad-guide');
+  const legend = previewEl.querySelector('.mini-legend');
+
+  if (key === 'page_background') {
+    miniLogo.style.display = 'none';
+    padGuide.style.display = 'none';
+    legend.textContent = '로고 미적용';
+    return;
+  }
+
+  const state = assetState[key];
+  const ds = fw / spec.w;
+  const logoActualW = spec.w * state.scale;
+
+  const logoPrev = document.getElementById('logoPreview');
+  let aspect = 2.5;
+  if (!logoPrev.classList.contains('hidden') && logoPrev.naturalWidth > 0) {
+    aspect = logoPrev.naturalWidth / logoPrev.naturalHeight;
+  }
+  const logoActualH = logoActualW / aspect;
+  const lw = logoActualW * ds;
+  const lh = logoActualH * ds;
+  const pad = state.padding * ds;
+
+  let left = 0, top = 0;
+  switch (state.position) {
+    case 'TL': left = pad; top = pad; break;
+    case 'TC': left = (fw-lw)/2; top = pad; break;
+    case 'TR': left = fw-lw-pad; top = pad; break;
+    case 'ML': left = pad; top = (fh-lh)/2; break;
+    case 'MC': left = (fw-lw)/2; top = (fh-lh)/2; break;
+    case 'MR': left = fw-lw-pad; top = (fh-lh)/2; break;
+    case 'BL': left = pad; top = fh-lh-pad; break;
+    case 'BC': left = (fw-lw)/2; top = fh-lh-pad; break;
+    case 'BR': left = fw-lw-pad; top = fh-lh-pad; break;
+  }
+  miniLogo.style.width = lw + 'px';
+  miniLogo.style.height = lh + 'px';
+  miniLogo.style.left = left + 'px';
+  miniLogo.style.top = top + 'px';
+  if (!logoPrev.classList.contains('hidden')) {
+    miniLogo.innerHTML = `<img src="${logoPrev.src}">`;
+    miniLogo.style.background = 'rgba(102,192,244,0.1)';
+  } else {
+    miniLogo.innerHTML = 'LOGO';
+    miniLogo.style.background = 'rgba(102,192,244,0.2)';
+  }
+
+  padGuide.style.left = pad + 'px';
+  padGuide.style.top = pad + 'px';
+  padGuide.style.width = Math.max(0, fw - pad*2) + 'px';
+  padGuide.style.height = Math.max(0, fh - pad*2) + 'px';
+
+  const pw = ((state.padding/spec.w)*100).toFixed(1);
+  legend.textContent = `여백 ${state.padding}px · 너비의 ${pw}%`;
+}
+
+// Build all cards
+for (const [key, spec] of Object.entries(SPECS)) {
+  assetCardList.appendChild(buildAssetCard(key, spec));
+}
+for (const key of Object.keys(SPECS)) buildMiniPosGrid(key);
+
+// Event delegation: sliders + padding inputs
+assetCardList.addEventListener('input', e => {
+  const t = e.target;
+  const scaleKey = t.dataset.scale;
+  const padKey = t.dataset.padding;
+  if (scaleKey) {
+    const v = parseInt(t.value);
+    assetState[scaleKey].scale = v / 100;
+    const valEl = assetCardList.querySelector(`[data-scaleval="${scaleKey}"]`);
+    if (valEl) valEl.textContent = v + '%';
+    updateAssetPreview(scaleKey);
+  } else if (padKey) {
+    assetState[padKey].padding = Math.max(0, parseInt(t.value) || 0);
+    updateAssetPreview(padKey);
+  }
+});
+
+// Checkbox toggle
+assetCardList.addEventListener('change', e => {
+  const cb = e.target;
+  const key = cb.dataset?.assetkey;
+  if (key && cb.type === 'checkbox') {
+    assetState[key].enabled = cb.checked;
+    document.getElementById(`asset-card-${key}`).classList.toggle('disabled', !cb.checked);
+  }
+});
+
+// Re-render all previews when logo / kv uploaded
+document.getElementById('logoPreview').addEventListener('load', () => {
+  for (const k of Object.keys(SPECS)) updateAssetPreview(k);
+});
+document.getElementById('kvPreview').addEventListener('load', () => {
+  for (const k of Object.keys(SPECS)) updateAssetPreview(k);
+});
+
+// Initial render
+for (const k of Object.keys(SPECS)) updateAssetPreview(k);
+
+// File uploads with drag & drop
+function setupDropZone(zoneId, inputId, previewId, fileKey) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+
+  ['dragenter','dragover'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.add('dragover'); }));
+  ['dragleave','drop'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.remove('dragover'); }));
+
+  zone.addEventListener('drop', e => {
+    const file = e.dataTransfer.files[0];
+    if (file) { input.files = e.dataTransfer.files; handleFile(file, preview); }
+  });
+  input.addEventListener('change', () => {
+    if (input.files[0]) handleFile(input.files[0], preview);
+  });
+
+  function handleFile(file, prev) {
+    const url = URL.createObjectURL(file);
+    prev.src = url;
+    prev.classList.remove('hidden');
+    checkUploadReady();
+  }
+}
+
+setupDropZone('kvZone','kvInput','kvPreview','keyVisual');
+setupDropZone('logoZone','logoInput','logoPreview','logo');
+
+function checkUploadReady() {
+  const kv = document.getElementById('kvInput').files[0];
+  const logo = document.getElementById('logoInput').files[0];
+  const btn = document.getElementById('generateBtn');
+  if (kv && logo) {
+    btn.disabled = false;
+    btn.textContent = '자산 생성하기';
+  }
+}
+
+function updateProgress(id, status) {
+  const el = document.getElementById(`prog-${id}`);
+  if (!el) return;
+  const statusEl = el.querySelector('.status');
+  statusEl.textContent = status === 'done' ? '완료' : status === 'error' ? '오류' : '처리 중...';
+  statusEl.className = `status status-${status === 'done' ? 'done' : status === 'error' ? 'error' : 'processing'}`;
+}
+
+function addPreviewCard(container, name, src) {
+  const card = document.createElement('div');
+  card.className = 'preview-card';
+  card.innerHTML = `<img src="${src}" alt="${name}"><div class="name">${name}</div>`;
+  container.appendChild(card);
+}
+
+function showWarnings(warnings) {
+  const div = document.getElementById('uploadWarnings');
+  div.innerHTML = (warnings || []).map(w => `<div class="warning">${w}</div>`).join('');
+}
+
+// Generate (100% client-side)
+document.getElementById('generateBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  btn.textContent = '이미지 로딩 중...';
+
+  try {
+    const kvFile = document.getElementById('kvInput').files[0];
+    const logoFile = document.getElementById('logoInput').files[0];
+    if (!kvFile || !logoFile) throw new Error('이미지를 먼저 업로드하세요');
+
+    const [kvImg, logoImg] = await Promise.all([fileToImage(kvFile), fileToImage(logoFile)]);
+
+    const warnings = [];
+    if (kvImg.naturalWidth < 2000) warnings.push(`키 비주얼 권장 2000px 이상 (현재 ${kvImg.naturalWidth}px)`);
+    if (logoImg.naturalWidth < 300) warnings.push(`로고 권장 300px 이상 (현재 ${logoImg.naturalWidth}px)`);
+    showWarnings(warnings);
+
+    const selected = Object.keys(assetState).filter(k => assetState[k].enabled);
+    if (!selected.length) {
+      alert('생성할 자산을 하나 이상 선택하세요.');
+      btn.disabled = false; btn.textContent = '자산 생성하기'; return;
+    }
+
+    btn.textContent = '생성 중...';
+
+    const progressList = document.getElementById('progressList');
+    const previewGrid = document.getElementById('previewGrid');
+    const downloadSection = document.getElementById('downloadSection');
+    progressList.innerHTML = '';
+    previewGrid.innerHTML = '';
+    progressList.classList.remove('hidden');
+    previewGrid.classList.remove('hidden');
+    downloadSection.classList.add('hidden');
+
+    for (const key of selected) {
+      const item = document.createElement('div');
+      item.className = 'progress-item';
+      item.id = `prog-${key}`;
+      item.innerHTML = `<span>${SPECS[key]?.label || key}</span><span class="status status-processing">대기</span>`;
+      progressList.appendChild(item);
+    }
+
+    const zip = new JSZip();
+
+    for (const key of selected) {
+      const spec = SPECS[key];
+      updateProgress(key, 'processing');
+      await nextTick();
+
+      try {
+        const blob = await compositeAsset(kvImg, logoImg, key, spec.w, spec.h, spec, assetState[key]);
+        const filename = `${key}.jpg`;
+        zip.file(filename, blob);
+        addPreviewCard(previewGrid, key, URL.createObjectURL(blob));
+        updateProgress(key, 'done');
+
+        if (spec.derivatives) {
+          for (const d of spec.derivatives) {
+            const dBlob = await compositeAsset(kvImg, logoImg, key, d.w, d.h, spec, assetState[key]);
+            const dName = `small_capsule_${d.w}x${d.h}.jpg`;
+            zip.file(dName, dBlob);
+            addPreviewCard(previewGrid, dName, URL.createObjectURL(dBlob));
+          }
+        }
+      } catch (err) {
+        console.error(`Error processing ${key}:`, err);
+        updateProgress(key, 'error');
+      }
+    }
+
+    btn.textContent = 'ZIP 압축 중...';
+    await nextTick();
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const zipUrl = URL.createObjectURL(zipBlob);
+    const dlBtn = document.getElementById('downloadBtn');
+    dlBtn.href = zipUrl;
+    dlBtn.download = `steam_assets_${Date.now()}.zip`;
+    downloadSection.classList.remove('hidden');
+    btn.textContent = '완료! 다시 생성하려면 설정 변경 후 클릭';
+    btn.disabled = false;
+  } catch (err) {
+    alert('오류: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = '자산 생성하기';
+  }
+});
+</script>
+</body>
+</html>
