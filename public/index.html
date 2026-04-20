@@ -9,8 +9,16 @@
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'Segoe UI',sans-serif; background:#f3f4f6; color:#1f2937; min-height:100vh; }
   .container { max-width:960px; margin:0 auto; padding:24px; }
-  h1 { color:#0f172a; font-size:24px; margin-bottom:8px; }
-  .subtitle { color:#2563eb; font-size:13px; margin-bottom:24px; }
+  .header-row { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap;
+    gap:12px; margin-bottom:24px; }
+  .header-row h1 { margin-bottom:4px; }
+  h1 { color:#0f172a; font-size:24px; }
+  .subtitle { color:#2563eb; font-size:13px; }
+  .guide-link { display:inline-flex; align-items:center; gap:6px; padding:8px 14px;
+    background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; border-radius:6px;
+    font-size:12px; font-weight:600; text-decoration:none; transition:all .15s; white-space:nowrap; }
+  .guide-link:hover { background:#dbeafe; border-color:#2563eb; }
+  .guide-link svg { width:14px; height:14px; }
 
   /* Cards */
   .card { background:#ffffff; border:1px solid #e5e7eb; border-radius:8px; padding:20px; margin-bottom:16px;
@@ -165,8 +173,20 @@
 </head>
 <body>
 <div class="container">
-  <h1>Steam 상점 그래픽 자산 생성기</h1>
-  <p class="subtitle">키 비주얼 + 로고를 업로드하면 모든 Steam 그래픽 자산을 자동 생성합니다</p>
+  <div class="header-row">
+    <div>
+      <h1>Steam 상점 그래픽 자산 생성기</h1>
+      <p class="subtitle">키 비주얼 + 로고를 업로드하면 모든 Steam 그래픽 자산을 자동 생성합니다</p>
+    </div>
+    <a class="guide-link" href="https://partner.steamgames.com/doc/store/assets/standard" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/>
+        <line x1="10" y1="14" x2="21" y2="3"/>
+      </svg>
+      Steam 가이드라인 열기
+    </a>
+  </div>
 
   <!-- Step 1: Upload -->
   <div class="card">
