@@ -144,6 +144,25 @@
   .no-logo-note { color:#92400e; font-size:12px; padding:14px;
     background:#fef3c7; border-radius:4px; border:1px solid #fcd34d; }
 
+  /* Tabs */
+  .tab-bar { display:flex; gap:4px; border-bottom:2px solid #e5e7eb;
+    margin-bottom:16px; flex-wrap:wrap; }
+  .tab { background:none; border:none; padding:10px 16px; font-size:13px; color:#6b7280;
+    cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px;
+    font-weight:500; transition:color .15s, border-color .15s; white-space:nowrap; }
+  .tab:hover { color:#2563eb; }
+  .tab.active { color:#2563eb; border-bottom-color:#2563eb; font-weight:600; }
+
+  /* Per-asset note + safe zone */
+  .asset-note { font-size:11px; color:#92400e; background:#fffbeb;
+    border:1px solid #fcd34d; padding:6px 10px; border-radius:4px;
+    margin-top:-4px; margin-bottom:10px; }
+  .mini-safe-zone { position:absolute; border:2px dashed rgba(22,163,74,0.55);
+    pointer-events:none; border-radius:2px; }
+  .mini-safe-label { position:absolute; top:2px; right:4px; font-size:9px;
+    color:#15803d; background:rgba(255,255,255,0.9); padding:1px 4px;
+    border-radius:2px; border:1px solid #bbf7d0; }
+
   /* Generate */
   .btn-generate { width:100%; padding:14px; background:#16a34a; color:#ffffff; border:none;
     border-radius:6px; font-size:16px; font-weight:600; cursor:pointer; transition:background .2s; }
@@ -178,7 +197,7 @@
       <h1>Steam 상점 그래픽 자산 생성기</h1>
       <p class="subtitle">키 비주얼 + 로고를 업로드하면 모든 Steam 그래픽 자산을 자동 생성합니다</p>
     </div>
-    <a class="guide-link" href="https://partner.steamgames.com/doc/store/assets/standard" target="_blank" rel="noopener">
+    <a class="guide-link" id="guideLink" href="https://partner.steamgames.com/doc/store/assets" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
         <polyline points="15 3 21 3 21 9"/>
@@ -206,14 +225,16 @@
     <div id="uploadWarnings"></div>
   </div>
 
-  <!-- Step 2: Assets + Logo Settings (combined) -->
+  <!-- Step 2: Tabs + Assets + Logo Settings -->
   <div class="card">
     <h2><span class="step-num">2</span> 자산 선택 및 로고 설정</h2>
-    <p style="font-size:12px; color:#8f98a0; margin-bottom:10px;">
-      체크박스로 생성 여부를 선택하고, 각 자산별로 로고 크기 · 위치 · 여백을 개별 설정하세요.
-      미리보기가 실시간으로 반영됩니다.
-    </p>
-    <div class="tooltip">Steam 가이드라인: 로고 외 텍스트 삽입 금지</div>
+    <div class="tab-bar" id="tabBar">
+      <button class="tab" data-tab="library">라이브러리 자산</button>
+      <button class="tab" data-tab="community">커뮤니티 &amp; 클라이언트 아이콘</button>
+      <button class="tab active" data-tab="store">상점 그래픽 자산</button>
+      <button class="tab" data-tab="event">이벤트 그래픽 자산</button>
+    </div>
+    <p id="tabDesc" style="font-size:12px; color:#6b7280; margin-bottom:10px;"></p>
     <div id="assetCardList" style="margin-top:12px;"></div>
   </div>
 
@@ -230,15 +251,63 @@
 </div>
 
 <script>
-const SPECS = {
-  header_capsule:   { w:920,  h:430,  required:true,  label:"헤더 캡슐" },
-  small_capsule:    { w:462,  h:174,  required:true,  label:"소형 캡슐",
-    derivatives:[{w:184,h:69},{w:120,h:45}] },
-  main_capsule:     { w:1232, h:706,  required:true,  label:"메인 캡슐" },
-  vertical_capsule: { w:748,  h:896,  required:true,  label:"수직 캡슐" },
-  page_background:  { w:1438, h:810,  required:false, label:"페이지 배경", logoOverlay:false },
-  bundle_header:    { w:707,  h:232,  required:false, label:"꾸러미 헤더" },
+// ===== Tab-based asset catalogs =====
+const TABS = {
+  library: {
+    label: '라이브러리 자산',
+    link: 'https://partner.steamgames.com/doc/store/assets/libraryassets',
+    desc: '라이브러리 화면에서 쓰이는 자산. 히어로는 텍스트 금지, 로고는 투명 PNG로 분리 출력됩니다.',
+    specs: {
+      library_capsule: { w:600,  h:900,  required:true,  label:'라이브러리 캡슐 (세로)', mode:'kv+logo' },
+      library_header:  { w:920,  h:430,  required:true,  label:'라이브러리 헤더', mode:'kv+logo' },
+      library_hero:    { w:3840, h:1240, required:true,  label:'라이브러리 히어로', mode:'kv-only',
+        safeZone:{w:860,h:380},
+        note:'텍스트/로고 금지. 중요 요소는 중앙 860×380 안전 영역 안쪽으로.' },
+      library_logo:    { w:1280, h:720,  required:true,  label:'라이브러리 로고', mode:'logo-only', output:'png',
+        note:'투명 PNG. 로고/로고타입만 출력 (히어로 위에 오버레이됨).' },
+    }
+  },
+  community: {
+    label: '커뮤니티 & 클라이언트 아이콘',
+    link: 'https://partner.steamgames.com/doc/store/assets/community',
+    desc: '커뮤니티·클라이언트에서 쓰이는 정사각 아이콘. 앱 아이콘은 JPG(배경 필수), 단축 아이콘은 투명 PNG.',
+    specs: {
+      app_icon:      { w:184,  h:184,  required:true,  label:'앱 아이콘', mode:'logo-on-bg',
+        bgColor:'#1b2838', output:'jpeg',
+        note:'JPG 필수(투명 불가). 배경색 지정 가능.' },
+      shortcut_icon: { w:256,  h:256,  required:true,  label:'단축 아이콘', mode:'logo-only', output:'png',
+        derivatives:[{w:512,h:512}],
+        note:'투명 PNG. 512×512 파생 자동 생성.' },
+    }
+  },
+  store: {
+    label: '상점 그래픽 자산',
+    link: 'https://partner.steamgames.com/doc/store/assets/standard',
+    desc: '상점 페이지 캡슐들. 모든 이미지는 로고 외 텍스트 삽입 금지.',
+    specs: {
+      header_capsule:   { w:920,  h:430,  required:true,  label:'헤더 캡슐', mode:'kv+logo' },
+      small_capsule:    { w:462,  h:174,  required:true,  label:'소형 캡슐', mode:'kv+logo',
+        derivatives:[{w:184,h:69},{w:120,h:45}] },
+      main_capsule:     { w:1232, h:706,  required:true,  label:'메인 캡슐', mode:'kv+logo' },
+      vertical_capsule: { w:748,  h:896,  required:true,  label:'수직 캡슐', mode:'kv+logo' },
+      page_background:  { w:1438, h:810,  required:false, label:'페이지 배경', mode:'kv-blur' },
+      bundle_header:    { w:707,  h:232,  required:false, label:'꾸러미 헤더', mode:'kv+logo' },
+    }
+  },
+  event: {
+    label: '이벤트 그래픽 자산',
+    link: 'https://partner.steamgames.com/doc/store/assets/eventassets',
+    desc: '이벤트 페이지 자산. 커버는 필수, 헤더는 선택.',
+    specs: {
+      event_cover:  { w:800,  h:450, required:true,  label:'이벤트 커버', mode:'kv+logo' },
+      event_header: { w:1920, h:622, required:false, label:'이벤트 헤더', mode:'kv+logo',
+        note:'이벤트 페이지 상단. 텍스트 배치 가이드는 공식 템플릿 참고.' },
+    }
+  }
 };
+let activeTab = 'store';
+function currentSpecs() { return TABS[activeTab].specs; }
+function currentState() { return tabStates[activeTab]; }
 
 // ===== Canvas utilities =====
 const POSITIONS = {
@@ -280,8 +349,26 @@ function drawCoverFit(ctx, img, dx, dy, dw, dh) {
   ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
-function canvasToBlob(canvas, quality = 0.95) {
-  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.95) {
+  return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+}
+
+function drawLogoByMode(ctx, logoImg, w, h, settings) {
+  if (!logoImg) return;
+  const scale = settings.scale ?? 0.4;
+  const padding = settings.padding ?? 40;
+  const position = settings.position || 'BC';
+  const logoAspect = logoImg.naturalHeight / logoImg.naturalWidth;
+  let lw = Math.round(w * scale);
+  let lh = Math.round(lw * logoAspect);
+  // fit-inside within (w - 2*pad, h - 2*pad)
+  const maxW = Math.max(1, w - padding * 2);
+  const maxH = Math.max(1, h - padding * 2);
+  if (lw > maxW) { lw = maxW; lh = Math.round(lw * logoAspect); }
+  if (lh > maxH) { lh = maxH; lw = Math.round(lh / logoAspect); }
+  const posFn = POSITIONS[position] || POSITIONS.BC;
+  const { x, y } = posFn(w, h, lw, lh, padding);
+  ctx.drawImage(logoImg, Math.max(0, x), Math.max(0, y), lw, lh);
 }
 
 async function compositeAsset(kvImg, logoImg, key, w, h, spec, settings) {
@@ -292,50 +379,68 @@ async function compositeAsset(kvImg, logoImg, key, w, h, spec, settings) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  if (key === 'page_background') {
+  const mode = spec.mode || 'kv+logo';
+  const output = spec.output || 'jpeg';
+
+  if (mode === 'kv-blur') {
     ctx.filter = 'blur(8px) brightness(0.6)';
     drawCoverFit(ctx, kvImg, 0, 0, w, h);
     ctx.filter = 'none';
-    return canvasToBlob(canvas);
+  } else if (mode === 'kv-only') {
+    drawCoverFit(ctx, kvImg, 0, 0, w, h);
+  } else if (mode === 'logo-only') {
+    // Transparent canvas with logo (scale/position/padding)
+    drawLogoByMode(ctx, logoImg, w, h, settings);
+  } else if (mode === 'logo-on-bg') {
+    ctx.fillStyle = spec.bgColor || '#1b2838';
+    ctx.fillRect(0, 0, w, h);
+    drawLogoByMode(ctx, logoImg, w, h, settings);
+  } else {
+    // 'kv+logo' default
+    drawCoverFit(ctx, kvImg, 0, 0, w, h);
+    drawLogoByMode(ctx, logoImg, w, h, settings);
   }
 
-  drawCoverFit(ctx, kvImg, 0, 0, w, h);
-
-  if (spec.logoOverlay !== false && logoImg) {
-    const scale = settings.scale ?? 0.4;
-    const padding = settings.padding ?? 40;
-    const position = settings.position || 'BC';
-    const logoAspect = logoImg.naturalHeight / logoImg.naturalWidth;
-    const lw = Math.round(w * scale);
-    const lh = Math.round(lw * logoAspect);
-    const posFn = POSITIONS[position] || POSITIONS.BC;
-    const { x, y } = posFn(w, h, lw, lh, padding);
-    ctx.drawImage(logoImg, Math.max(0, x), Math.max(0, y), lw, lh);
-  }
-  return canvasToBlob(canvas);
+  if (output === 'png') return canvasToBlob(canvas, 'image/png');
+  return canvasToBlob(canvas, 'image/jpeg', 0.95);
 }
 
 function nextTick() { return new Promise(r => setTimeout(r, 0)); }
 
-// ===== Per-asset state =====
+// ===== Per-tab state =====
 const POSITIONS_ORDER = ['TL','TC','TR','ML','MC','MR','BL','BC','BR'];
 const POS_LABELS = ['↖','↑','↗','←','●','→','↙','↓','↘'];
-const assetState = {};
-for (const [key, spec] of Object.entries(SPECS)) {
-  assetState[key] = {
-    enabled: spec.required,
-    scale: 0.4,
-    position: 'BC',
-    padding: key === 'small_capsule' ? 10 : 40
-  };
+
+function initialStateFor(key, spec) {
+  const mode = spec.mode || 'kv+logo';
+  if (mode === 'logo-only' || mode === 'logo-on-bg') {
+    return { enabled: spec.required, scale: 0.7, position: 'MC', padding: 16 };
+  }
+  if (mode === 'kv-only' || mode === 'kv-blur') {
+    return { enabled: spec.required, scale: 0.4, position: 'BC', padding: 40 };
+  }
+  return { enabled: spec.required, scale: 0.4, position: 'BC',
+    padding: key === 'small_capsule' ? 10 : 40 };
+}
+
+const tabStates = {};
+for (const [tabKey, tab] of Object.entries(TABS)) {
+  tabStates[tabKey] = {};
+  for (const [k, s] of Object.entries(tab.specs)) tabStates[tabKey][k] = initialStateFor(k, s);
 }
 
 const assetCardList = document.getElementById('assetCardList');
 
 function buildAssetCard(key, spec) {
-  const state = assetState[key];
-  const hasLogo = key !== 'page_background';
-  const subtitle = key === 'small_capsule' ? ' (+ 184×69, 120×45 파생)' : '';
+  const state = currentState()[key];
+  const mode = spec.mode || 'kv+logo';
+  const showControls = !(mode === 'kv-only' || mode === 'kv-blur');
+  const derivSub = spec.derivatives ? ` (+ ${spec.derivatives.map(d=>`${d.w}×${d.h}`).join(', ')})` : '';
+  const outputTag = spec.output === 'png' ? 'PNG' : 'JPG';
+  const modeNoteMap = {
+    'kv-only':  '텍스트/로고 미합성 — 키 비주얼만 그대로 사용됩니다.',
+    'kv-blur':  '키 비주얼을 블러 + 어둡게 처리해 배경으로 사용됩니다.',
+  };
 
   const card = document.createElement('div');
   card.className = 'asset-card' + (spec.required ? ' required' : '') + (state.enabled ? '' : ' disabled');
@@ -343,22 +448,24 @@ function buildAssetCard(key, spec) {
   card.innerHTML = `
     <label class="asset-card-head">
       <input type="checkbox" data-assetkey="${key}" ${state.enabled ? 'checked' : ''}>
-      <span class="title">${spec.label}${subtitle}</span>
-      <span class="dims">${spec.w}×${spec.h}</span>
+      <span class="title">${spec.label}${derivSub}</span>
+      <span class="dims">${spec.w}×${spec.h} · ${outputTag}</span>
       <span class="badge ${spec.required ? '' : 'opt'}">${spec.required ? '필수' : '선택'}</span>
     </label>
+    ${spec.note ? `<div class="asset-note">${spec.note}</div>` : ''}
     <div class="asset-card-body">
-      <div class="asset-preview-mini" data-preview="${key}">
+      <div class="asset-preview-mini" data-preview="${key}" data-mode="${mode}">
+        ${spec.safeZone ? '<div class="mini-safe-zone"></div><div class="mini-safe-label">안전 영역</div>' : ''}
         <div class="mini-pad-guide"></div>
         <div class="mini-logo">LOGO</div>
         <div class="mini-legend"></div>
         <div class="mini-dims">${spec.w}×${spec.h}</div>
       </div>
-      ${hasLogo ? `
+      ${showControls ? `
         <div class="asset-controls">
           <div class="ctrl-row">
             <label>로고 크기: <span class="val-display" data-scaleval="${key}">${Math.round(state.scale*100)}%</span></label>
-            <input type="range" data-scale="${key}" min="10" max="90" value="${Math.round(state.scale*100)}">
+            <input type="range" data-scale="${key}" min="10" max="95" value="${Math.round(state.scale*100)}">
           </div>
           <div class="ctrl-row ctrl-row-hbox">
             <div>
@@ -367,15 +474,12 @@ function buildAssetCard(key, spec) {
             </div>
             <div>
               <label>여백 (px)</label>
-              <input type="number" data-padding="${key}" value="${state.padding}" min="0" max="300">
+              <input type="number" data-padding="${key}" value="${state.padding}" min="0" max="500">
             </div>
           </div>
         </div>
       ` : `
-        <div class="no-logo-note">
-          페이지 배경에는 로고가 합성되지 않습니다 (Steam 가이드라인).
-          키 비주얼이 블러 + 어둡게 처리되어 사용됩니다.
-        </div>
+        <div class="no-logo-note">${modeNoteMap[mode] || ''}</div>
       `}
     </div>
   `;
@@ -387,13 +491,13 @@ function buildMiniPosGrid(key) {
   if (!grid) return;
   POSITIONS_ORDER.forEach((p, i) => {
     const b = document.createElement('div');
-    b.className = 'mini-pos-btn' + (assetState[key].position === p ? ' active' : '');
+    b.className = 'mini-pos-btn' + (currentState()[key].position === p ? ' active' : '');
     b.textContent = POS_LABELS[i];
     b.dataset.pos = p;
     b.onclick = () => {
       grid.querySelectorAll('.mini-pos-btn').forEach(x => x.classList.remove('active'));
       b.classList.add('active');
-      assetState[key].position = p;
+      currentState()[key].position = p;
       updateAssetPreview(key);
     };
     grid.appendChild(b);
@@ -401,9 +505,10 @@ function buildMiniPosGrid(key) {
 }
 
 function updateAssetPreview(key) {
-  const spec = SPECS[key];
+  const spec = currentSpecs()[key];
+  const state = currentState()[key];
   const previewEl = assetCardList.querySelector(`[data-preview="${key}"]`);
-  if (!previewEl) return;
+  if (!previewEl || !spec) return;
 
   const MAX_W = 560, MAX_H = 220;
   let fw = MAX_W, fh = MAX_W * spec.h / spec.w;
@@ -411,27 +516,56 @@ function updateAssetPreview(key) {
   previewEl.style.width = fw + 'px';
   previewEl.style.height = fh + 'px';
 
+  const mode = spec.mode || 'kv+logo';
   const miniLogo = previewEl.querySelector('.mini-logo');
   const padGuide = previewEl.querySelector('.mini-pad-guide');
   const legend = previewEl.querySelector('.mini-legend');
+  const safeEl = previewEl.querySelector('.mini-safe-zone');
+  const safeLabel = previewEl.querySelector('.mini-safe-label');
+  const ds = fw / spec.w;
 
-  if (key === 'page_background') {
+  // Safe zone (library_hero)
+  if (safeEl && spec.safeZone) {
+    const sw = spec.safeZone.w * ds, sh_ = spec.safeZone.h * ds;
+    safeEl.style.left = ((fw - sw)/2) + 'px';
+    safeEl.style.top = ((fh - sh_)/2) + 'px';
+    safeEl.style.width = sw + 'px';
+    safeEl.style.height = sh_ + 'px';
+  }
+
+  // Background styling for logo-on-bg
+  if (mode === 'logo-on-bg') {
+    previewEl.style.backgroundImage = 'none';
+    previewEl.style.background = spec.bgColor || '#1b2838';
+  } else {
+    previewEl.style.backgroundImage = '';
+    previewEl.style.background = '';
+  }
+
+  if (mode === 'kv-only' || mode === 'kv-blur') {
     miniLogo.style.display = 'none';
     padGuide.style.display = 'none';
-    legend.textContent = '로고 미적용';
+    legend.textContent = mode === 'kv-blur' ? '블러 배경' : (spec.safeZone ? '텍스트 금지 / 안전 영역' : '로고 미적용');
     return;
   }
 
-  const state = assetState[key];
-  const ds = fw / spec.w;
-  const logoActualW = spec.w * state.scale;
+  miniLogo.style.display = '';
+  padGuide.style.display = '';
 
   const logoPrev = document.getElementById('logoPreview');
   let aspect = 2.5;
   if (!logoPrev.classList.contains('hidden') && logoPrev.naturalWidth > 0) {
     aspect = logoPrev.naturalWidth / logoPrev.naturalHeight;
   }
-  const logoActualH = logoActualW / aspect;
+  // fit-inside within padded area
+  const padSrc = state.padding;
+  const maxWSrc = Math.max(1, spec.w - padSrc*2);
+  const maxHSrc = Math.max(1, spec.h - padSrc*2);
+  let logoActualW = spec.w * state.scale;
+  let logoActualH = logoActualW / aspect;
+  if (logoActualW > maxWSrc) { logoActualW = maxWSrc; logoActualH = logoActualW / aspect; }
+  if (logoActualH > maxHSrc) { logoActualH = maxHSrc; logoActualW = logoActualH * aspect; }
+
   const lw = logoActualW * ds;
   const lh = logoActualH * ds;
   const pad = state.padding * ds;
@@ -454,10 +588,10 @@ function updateAssetPreview(key) {
   miniLogo.style.top = top + 'px';
   if (!logoPrev.classList.contains('hidden')) {
     miniLogo.innerHTML = `<img src="${logoPrev.src}">`;
-    miniLogo.style.background = 'rgba(102,192,244,0.1)';
+    miniLogo.style.background = 'rgba(37,99,235,0.1)';
   } else {
     miniLogo.innerHTML = 'LOGO';
-    miniLogo.style.background = 'rgba(102,192,244,0.2)';
+    miniLogo.style.background = 'rgba(37,99,235,0.2)';
   }
 
   padGuide.style.left = pad + 'px';
@@ -469,11 +603,30 @@ function updateAssetPreview(key) {
   legend.textContent = `여백 ${state.padding}px · 너비의 ${pw}%`;
 }
 
-// Build all cards
-for (const [key, spec] of Object.entries(SPECS)) {
-  assetCardList.appendChild(buildAssetCard(key, spec));
+function rebuildCards() {
+  assetCardList.innerHTML = '';
+  for (const [key, spec] of Object.entries(currentSpecs())) {
+    assetCardList.appendChild(buildAssetCard(key, spec));
+  }
+  for (const key of Object.keys(currentSpecs())) buildMiniPosGrid(key);
+  for (const key of Object.keys(currentSpecs())) updateAssetPreview(key);
 }
-for (const key of Object.keys(SPECS)) buildMiniPosGrid(key);
+
+function switchTab(tabKey) {
+  if (!TABS[tabKey]) return;
+  activeTab = tabKey;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabKey));
+  document.getElementById('tabDesc').textContent = TABS[tabKey].desc;
+  const link = document.getElementById('guideLink');
+  if (link) link.href = TABS[tabKey].link;
+  rebuildCards();
+}
+
+// Tab click handlers
+document.getElementById('tabBar').addEventListener('click', e => {
+  const btn = e.target.closest('.tab');
+  if (btn?.dataset.tab) switchTab(btn.dataset.tab);
+});
 
 // Event delegation: sliders + padding inputs
 assetCardList.addEventListener('input', e => {
@@ -482,12 +635,12 @@ assetCardList.addEventListener('input', e => {
   const padKey = t.dataset.padding;
   if (scaleKey) {
     const v = parseInt(t.value);
-    assetState[scaleKey].scale = v / 100;
+    currentState()[scaleKey].scale = v / 100;
     const valEl = assetCardList.querySelector(`[data-scaleval="${scaleKey}"]`);
     if (valEl) valEl.textContent = v + '%';
     updateAssetPreview(scaleKey);
   } else if (padKey) {
-    assetState[padKey].padding = Math.max(0, parseInt(t.value) || 0);
+    currentState()[padKey].padding = Math.max(0, parseInt(t.value) || 0);
     updateAssetPreview(padKey);
   }
 });
@@ -497,21 +650,21 @@ assetCardList.addEventListener('change', e => {
   const cb = e.target;
   const key = cb.dataset?.assetkey;
   if (key && cb.type === 'checkbox') {
-    assetState[key].enabled = cb.checked;
+    currentState()[key].enabled = cb.checked;
     document.getElementById(`asset-card-${key}`).classList.toggle('disabled', !cb.checked);
   }
 });
 
 // Re-render all previews when logo / kv uploaded
 document.getElementById('logoPreview').addEventListener('load', () => {
-  for (const k of Object.keys(SPECS)) updateAssetPreview(k);
+  for (const k of Object.keys(currentSpecs())) updateAssetPreview(k);
 });
 document.getElementById('kvPreview').addEventListener('load', () => {
-  for (const k of Object.keys(SPECS)) updateAssetPreview(k);
+  for (const k of Object.keys(currentSpecs())) updateAssetPreview(k);
 });
 
-// Initial render
-for (const k of Object.keys(SPECS)) updateAssetPreview(k);
+// Initial render (defaults to 'store' tab)
+switchTab(activeTab);
 
 // File uploads with drag & drop
 function setupDropZone(zoneId, inputId, previewId, fileKey) {
@@ -589,7 +742,9 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     if (logoImg.naturalWidth < 300) warnings.push(`로고 권장 300px 이상 (현재 ${logoImg.naturalWidth}px)`);
     showWarnings(warnings);
 
-    const selected = Object.keys(assetState).filter(k => assetState[k].enabled);
+    const specs = currentSpecs();
+    const state = currentState();
+    const selected = Object.keys(specs).filter(k => state[k].enabled);
     if (!selected.length) {
       alert('생성할 자산을 하나 이상 선택하세요.');
       btn.disabled = false; btn.textContent = '자산 생성하기'; return;
@@ -610,28 +765,29 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
       const item = document.createElement('div');
       item.className = 'progress-item';
       item.id = `prog-${key}`;
-      item.innerHTML = `<span>${SPECS[key]?.label || key}</span><span class="status status-processing">대기</span>`;
+      item.innerHTML = `<span>${specs[key]?.label || key}</span><span class="status status-processing">대기</span>`;
       progressList.appendChild(item);
     }
 
     const zip = new JSZip();
 
     for (const key of selected) {
-      const spec = SPECS[key];
+      const spec = specs[key];
+      const ext = spec.output === 'png' ? 'png' : 'jpg';
       updateProgress(key, 'processing');
       await nextTick();
 
       try {
-        const blob = await compositeAsset(kvImg, logoImg, key, spec.w, spec.h, spec, assetState[key]);
-        const filename = `${key}.jpg`;
+        const blob = await compositeAsset(kvImg, logoImg, key, spec.w, spec.h, spec, state[key]);
+        const filename = `${key}.${ext}`;
         zip.file(filename, blob);
         addPreviewCard(previewGrid, key, URL.createObjectURL(blob));
         updateProgress(key, 'done');
 
         if (spec.derivatives) {
           for (const d of spec.derivatives) {
-            const dBlob = await compositeAsset(kvImg, logoImg, key, d.w, d.h, spec, assetState[key]);
-            const dName = `small_capsule_${d.w}x${d.h}.jpg`;
+            const dBlob = await compositeAsset(kvImg, logoImg, key, d.w, d.h, spec, state[key]);
+            const dName = `${key}_${d.w}x${d.h}.${ext}`;
             zip.file(dName, dBlob);
             addPreviewCard(previewGrid, dName, URL.createObjectURL(dBlob));
           }
@@ -648,9 +804,9 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     const zipUrl = URL.createObjectURL(zipBlob);
     const dlBtn = document.getElementById('downloadBtn');
     dlBtn.href = zipUrl;
-    dlBtn.download = `steam_assets_${Date.now()}.zip`;
+    dlBtn.download = `steam_${activeTab}_${Date.now()}.zip`;
     downloadSection.classList.remove('hidden');
-    btn.textContent = '완료! 다시 생성하려면 설정 변경 후 클릭';
+    btn.textContent = '완료! 다른 탭/설정 변경 후 다시 생성 가능';
     btn.disabled = false;
   } catch (err) {
     alert('오류: ' + err.message);
