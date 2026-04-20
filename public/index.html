@@ -28,7 +28,8 @@
     display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
 
   /* Upload */
-  .upload-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .upload-grid { display:flex; gap:16px; }
+  .upload-grid > .drop-zone { flex:1; min-width:0; }
   .drop-zone { border:2px dashed #d1d5db; border-radius:8px; padding:32px 16px; text-align:center;
     cursor:pointer; transition:border-color .2s, background .2s; position:relative; background:#fafbfc; }
   .drop-zone:hover, .drop-zone.dragover { border-color:#2563eb; background:#eff6ff; }
@@ -146,7 +147,9 @@
 
   /* Tabs */
   .tab-bar { display:flex; gap:4px; border-bottom:2px solid #e5e7eb;
-    margin-bottom:16px; flex-wrap:wrap; }
+    margin-bottom:6px; flex-wrap:wrap; }
+  .tab-desc { font-size:12px; color:#6b7280; margin-bottom:16px; padding:0 4px; }
+  .per-tab-hint { font-size:11px; color:#6b7280; font-weight:400; margin-left:6px; }
   .tab { background:none; border:none; padding:10px 16px; font-size:13px; color:#6b7280;
     cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px;
     font-weight:500; transition:color .15s, border-color .15s; white-space:nowrap; }
@@ -207,35 +210,37 @@
     </a>
   </div>
 
-  <!-- Step 1: Upload -->
+  <!-- Tab bar (top-level, controls all steps below) -->
+  <div class="tab-bar" id="tabBar">
+    <button class="tab" data-tab="library">라이브러리 자산</button>
+    <button class="tab" data-tab="community">커뮤니티 &amp; 클라이언트 아이콘</button>
+    <button class="tab active" data-tab="store">상점 그래픽 자산</button>
+    <button class="tab" data-tab="event">이벤트 그래픽 자산</button>
+  </div>
+  <p id="tabDesc" class="tab-desc"></p>
+
+  <!-- Step 1: Upload (per active tab) -->
   <div class="card">
-    <h2><span class="step-num">1</span> 이미지 업로드</h2>
+    <h2><span class="step-num">1</span> 이미지 업로드<span class="per-tab-hint">— 각 탭별로 따로 저장됩니다</span></h2>
     <div class="upload-grid">
       <div class="drop-zone" id="kvZone">
         <input type="file" accept=".png,.jpg,.jpeg,.webp" id="kvInput">
-        <div class="label"><strong>키 비주얼 (필수)</strong>PNG/JPG, 2000px+ 권장</div>
+        <div class="label"><strong>키 비주얼</strong>PNG/JPG, 2000px+ 권장</div>
         <img class="preview-img hidden" id="kvPreview">
       </div>
       <div class="drop-zone" id="logoZone">
         <input type="file" accept=".png,.jpg,.jpeg,.webp" id="logoInput">
-        <div class="label"><strong>로고 (필수)</strong>투명 배경 PNG 권장</div>
+        <div class="label"><strong>로고</strong>투명 배경 PNG 권장</div>
         <img class="preview-img hidden" id="logoPreview">
       </div>
     </div>
     <div id="uploadWarnings"></div>
   </div>
 
-  <!-- Step 2: Tabs + Assets + Logo Settings -->
+  <!-- Step 2: Assets + Logo Settings -->
   <div class="card">
     <h2><span class="step-num">2</span> 자산 선택 및 로고 설정</h2>
-    <div class="tab-bar" id="tabBar">
-      <button class="tab" data-tab="library">라이브러리 자산</button>
-      <button class="tab" data-tab="community">커뮤니티 &amp; 클라이언트 아이콘</button>
-      <button class="tab active" data-tab="store">상점 그래픽 자산</button>
-      <button class="tab" data-tab="event">이벤트 그래픽 자산</button>
-    </div>
-    <p id="tabDesc" style="font-size:12px; color:#6b7280; margin-bottom:10px;"></p>
-    <div id="assetCardList" style="margin-top:12px;"></div>
+    <div id="assetCardList"></div>
   </div>
 
   <!-- Step 3: Generate -->
@@ -257,6 +262,7 @@ const TABS = {
     label: '라이브러리 자산',
     link: 'https://partner.steamgames.com/doc/store/assets/libraryassets',
     desc: '라이브러리 화면에서 쓰이는 자산. 히어로는 텍스트 금지, 로고는 투명 PNG로 분리 출력됩니다.',
+    requires: { kv: true, logo: true },
     specs: {
       library_capsule: { w:600,  h:900,  required:true,  label:'라이브러리 캡슐 (세로)', mode:'kv+logo' },
       library_header:  { w:920,  h:430,  required:true,  label:'라이브러리 헤더', mode:'kv+logo' },
@@ -270,7 +276,8 @@ const TABS = {
   community: {
     label: '커뮤니티 & 클라이언트 아이콘',
     link: 'https://partner.steamgames.com/doc/store/assets/community',
-    desc: '커뮤니티·클라이언트에서 쓰이는 정사각 아이콘. 앱 아이콘은 JPG(배경 필수), 단축 아이콘은 투명 PNG.',
+    desc: '커뮤니티·클라이언트에서 쓰이는 정사각 아이콘. 앱 아이콘은 JPG(배경 필수), 단축 아이콘은 투명 PNG. 로고만 있으면 생성 가능.',
+    requires: { kv: false, logo: true },
     specs: {
       app_icon:      { w:184,  h:184,  required:true,  label:'앱 아이콘', mode:'logo-on-bg',
         bgColor:'#1b2838', output:'jpeg',
@@ -284,6 +291,7 @@ const TABS = {
     label: '상점 그래픽 자산',
     link: 'https://partner.steamgames.com/doc/store/assets/standard',
     desc: '상점 페이지 캡슐들. 모든 이미지는 로고 외 텍스트 삽입 금지.',
+    requires: { kv: true, logo: true },
     specs: {
       header_capsule:   { w:920,  h:430,  required:true,  label:'헤더 캡슐', mode:'kv+logo' },
       small_capsule:    { w:462,  h:174,  required:true,  label:'소형 캡슐', mode:'kv+logo',
@@ -298,6 +306,7 @@ const TABS = {
     label: '이벤트 그래픽 자산',
     link: 'https://partner.steamgames.com/doc/store/assets/eventassets',
     desc: '이벤트 페이지 자산. 커버는 필수, 헤더는 선택.',
+    requires: { kv: true, logo: true },
     specs: {
       event_cover:  { w:800,  h:450, required:true,  label:'이벤트 커버', mode:'kv+logo' },
       event_header: { w:1920, h:622, required:false, label:'이벤트 헤더', mode:'kv+logo',
@@ -308,6 +317,10 @@ const TABS = {
 let activeTab = 'store';
 function currentSpecs() { return TABS[activeTab].specs; }
 function currentState() { return tabStates[activeTab]; }
+
+// Per-tab uploaded files (KV + Logo)
+const tabFiles = {};
+for (const k of Object.keys(TABS)) tabFiles[k] = { kvFile: null, logoFile: null, kvUrl: null, logoUrl: null };
 
 // ===== Canvas utilities =====
 const POSITIONS = {
@@ -619,7 +632,40 @@ function switchTab(tabKey) {
   document.getElementById('tabDesc').textContent = TABS[tabKey].desc;
   const link = document.getElementById('guideLink');
   if (link) link.href = TABS[tabKey].link;
+  syncUploadUI();
   rebuildCards();
+}
+
+function syncUploadUI() {
+  const req = TABS[activeTab].requires;
+  const files = tabFiles[activeTab];
+  document.getElementById('kvZone').style.display = req.kv ? '' : 'none';
+  document.getElementById('logoZone').style.display = req.logo ? '' : 'none';
+
+  document.getElementById('kvInput').value = '';
+  document.getElementById('logoInput').value = '';
+
+  const kvPrev = document.getElementById('kvPreview');
+  const logoPrev = document.getElementById('logoPreview');
+
+  if (files.kvFile) {
+    if (!files.kvUrl) files.kvUrl = URL.createObjectURL(files.kvFile);
+    kvPrev.src = files.kvUrl;
+    kvPrev.classList.remove('hidden');
+  } else {
+    kvPrev.removeAttribute('src');
+    kvPrev.classList.add('hidden');
+  }
+  if (files.logoFile) {
+    if (!files.logoUrl) files.logoUrl = URL.createObjectURL(files.logoFile);
+    logoPrev.src = files.logoUrl;
+    logoPrev.classList.remove('hidden');
+  } else {
+    logoPrev.removeAttribute('src');
+    logoPrev.classList.add('hidden');
+  }
+  document.getElementById('uploadWarnings').innerHTML = '';
+  checkUploadReady();
 }
 
 // Tab click handlers
@@ -666,8 +712,8 @@ document.getElementById('kvPreview').addEventListener('load', () => {
 // Initial render (defaults to 'store' tab)
 switchTab(activeTab);
 
-// File uploads with drag & drop
-function setupDropZone(zoneId, inputId, previewId, fileKey) {
+// File uploads with drag & drop — stores to tabFiles[activeTab]
+function setupDropZone(zoneId, inputId, previewId, fileKey, urlKey) {
   const zone = document.getElementById(zoneId);
   const input = document.getElementById(inputId);
   const preview = document.getElementById(previewId);
@@ -684,23 +730,34 @@ function setupDropZone(zoneId, inputId, previewId, fileKey) {
   });
 
   function handleFile(file, prev) {
-    const url = URL.createObjectURL(file);
-    prev.src = url;
+    const slot = tabFiles[activeTab];
+    if (slot[urlKey]) URL.revokeObjectURL(slot[urlKey]);
+    slot[fileKey] = file;
+    slot[urlKey] = URL.createObjectURL(file);
+    prev.src = slot[urlKey];
     prev.classList.remove('hidden');
     checkUploadReady();
   }
 }
 
-setupDropZone('kvZone','kvInput','kvPreview','keyVisual');
-setupDropZone('logoZone','logoInput','logoPreview','logo');
+setupDropZone('kvZone','kvInput','kvPreview','kvFile','kvUrl');
+setupDropZone('logoZone','logoInput','logoPreview','logoFile','logoUrl');
 
 function checkUploadReady() {
-  const kv = document.getElementById('kvInput').files[0];
-  const logo = document.getElementById('logoInput').files[0];
+  const req = TABS[activeTab].requires;
+  const files = tabFiles[activeTab];
   const btn = document.getElementById('generateBtn');
-  if (kv && logo) {
+  const kvOk = !req.kv || !!files.kvFile;
+  const logoOk = !req.logo || !!files.logoFile;
+  if (kvOk && logoOk) {
     btn.disabled = false;
     btn.textContent = '자산 생성하기';
+  } else {
+    btn.disabled = true;
+    const missing = [];
+    if (!kvOk) missing.push('키 비주얼');
+    if (!logoOk) missing.push('로고');
+    btn.textContent = `${missing.join(' + ')} 업로드 필요`;
   }
 }
 
@@ -731,15 +788,19 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
   btn.textContent = '이미지 로딩 중...';
 
   try {
-    const kvFile = document.getElementById('kvInput').files[0];
-    const logoFile = document.getElementById('logoInput').files[0];
-    if (!kvFile || !logoFile) throw new Error('이미지를 먼저 업로드하세요');
+    const req = TABS[activeTab].requires;
+    const files = tabFiles[activeTab];
+    if (req.kv && !files.kvFile) throw new Error('키 비주얼을 업로드하세요');
+    if (req.logo && !files.logoFile) throw new Error('로고를 업로드하세요');
 
-    const [kvImg, logoImg] = await Promise.all([fileToImage(kvFile), fileToImage(logoFile)]);
+    const [kvImg, logoImg] = await Promise.all([
+      files.kvFile ? fileToImage(files.kvFile) : Promise.resolve(null),
+      files.logoFile ? fileToImage(files.logoFile) : Promise.resolve(null),
+    ]);
 
     const warnings = [];
-    if (kvImg.naturalWidth < 2000) warnings.push(`키 비주얼 권장 2000px 이상 (현재 ${kvImg.naturalWidth}px)`);
-    if (logoImg.naturalWidth < 300) warnings.push(`로고 권장 300px 이상 (현재 ${logoImg.naturalWidth}px)`);
+    if (kvImg && kvImg.naturalWidth < 2000) warnings.push(`키 비주얼 권장 2000px 이상 (현재 ${kvImg.naturalWidth}px)`);
+    if (logoImg && logoImg.naturalWidth < 300) warnings.push(`로고 권장 300px 이상 (현재 ${logoImg.naturalWidth}px)`);
     showWarnings(warnings);
 
     const specs = currentSpecs();
